@@ -1,6 +1,6 @@
 #include "web/routers.hpp"
 
 int main() {
-    auto ser = server("0.0.0.0");
-    ser.run();
+    server& ser = server::instance();
+    ser.run("0.0.0.0");
 };

@@ -1,45 +1,45 @@
 #ifndef EXAMPLE_SERVER_HPP
 #define EXAMPLE_SERVER_HPP
+
 #include <utility>
 
 #include "init.hpp"
 #include "spdlog/spdlog.h"
 #include "stack"
 
-class server : public std::enable_shared_from_this<server> {
+class server {
 public:
-
-    explicit server(const char *host, uint16_t port = 8000, uint8_t concurrency = 1) :
-            host(host), port(port), ioc(net::io_context{concurrency}),
-            ac(ioc, tcp::endpoint(tcp::v4(), port)),
-            soc(ioc) {};
+    static server &instance() {
+        static server ser;
+        return ser;
+    }
 
     server(const server &other) = delete;
 
     server(server &&other) = delete;
 
-    ~server() {
-        soc.close();
-        ioc.stop();
-    };
 
     // 注册路由回调函数
-    void router(const char *route, void (*pFunction)(const std::shared_ptr<server> &,
-                                                     http::request<http::string_body>)) {
-        auto ptr = std::shared_ptr<server>(this);
-        router_map[route] = std::move([ptr, pFunction](http::request<http::string_body> &body) {
-            return pFunction(ptr, body);
-        });
+    void router(const char *route,
+                http::response<http::string_body>
+                (*pFunction)(const server *const, http::request<http::string_body>)) {
+
+        router_map[route] = [this, pFunction](http::request<http::string_body> &req) {
+            return pFunction(this, req);
+        };
     };
 
-    void handler(tcp::socket & _soc){
+    void handler(tcp::socket &_soc) {
         beast::flat_buffer buffer;
         http::request<http::string_body> req;
+
         http::read(_soc, buffer, req);
+        auto target = req.target().data();
+        spdlog::info("receive from '{}', '{}'", _soc.remote_endpoint().address().to_string(), target);
         try {
-            auto func = router_map[req.target().data()];
+            auto func = router_map[target];
             func(req);
-        } catch (const std::exception & exception) {
+        } catch (const std::exception &exception) {
             spdlog::error("request failed: {}", exception.what());
             http::response<http::string_body> res{http::status::not_found, req.version()};
             res.set(http::field::server, "Beast");
@@ -55,12 +55,17 @@ public:
         }
     }
 
-    void run() {
+    void run(const char *host_, uint16_t port_ = 8000, uint8_t concurrency = 1) {
+        this->host = host_;
+        this->port = port_;
+        this->ioc = new net::io_context{concurrency};
+        this->ac = new tcp::acceptor{*this->ioc, tcp::endpoint(tcp::v4(), port)};
+        this->soc =new tcp::socket{*ioc};
         spdlog::info("server at {}:{}", host, port);
         try {
             while (true) {
-                ac.accept(soc);
-                handler(soc);
+                (*ac).accept(*soc);
+                handler(*soc);
             }
         }
         catch (const std::exception &exception) {
@@ -70,14 +75,18 @@ public:
     };
 
 private:
-    net::io_context ioc;
-    tcp::socket soc;
-    const char *host;
-    uint16_t port;
+
+    server() = default;
+
+    net::io_context* ioc = nullptr;
+    tcp::socket* soc = nullptr;
+    const char *host = nullptr;
+    uint16_t port = 0;
     // 回调函数哈希表
-    std::unordered_map<const char *, std::function<void(http::request<http::string_body> &)>> router_map;
+    std::unordered_map<const char *, std::function<http::response<http::string_body>(
+            http::request<http::string_body> &)>> router_map;
     std::stack<int> middleware;
-    tcp::acceptor ac;
+    tcp::acceptor* ac = nullptr;
 };
 
 #endif //EXAMPLE_SERVER_HPP
