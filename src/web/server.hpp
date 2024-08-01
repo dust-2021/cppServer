@@ -37,20 +37,30 @@ public:
         auto target = req.target().data();
         spdlog::info("receive from '{}', '{}'", _soc.remote_endpoint().address().to_string(), target);
         try {
-            auto func = router_map[target];
-            func(req);
-        } catch (const std::exception &exception) {
-            spdlog::error("request failed: {}", exception.what());
-            http::response<http::string_body> res{http::status::not_found, req.version()};
-            res.set(http::field::server, "Beast");
-            res.set(http::field::content_type, "text/plain");
-            res.keep_alive(req.keep_alive());
-            res.body() = exception.what();
+            auto it = router_map.find(target);
+            http::response<http::string_body> res;
+            if (it == router_map.end()) {
+                res = http::response<http::string_body>{http::status::not_found, req.version()};
+
+                res.set(http::field::server, "Beast");
+                res.set(http::field::content_type, "text/plain");
+                res.keep_alive(req.keep_alive());
+                res.body() = "Not Found";
+
+            } else {
+                auto func = it->second;
+                res = func(req);
+            }
+
             res.prepare_payload();
 
             http::write(_soc, res);
 
             _soc.shutdown(tcp::socket::shutdown_send);
+            _soc.close();
+            return;
+        } catch (const std::exception &exception) {
+            spdlog::error("request failed: {}", exception.what());
             _soc.close();
         }
     }
@@ -60,7 +70,7 @@ public:
         this->port = port_;
         this->ioc = new net::io_context{concurrency};
         this->ac = new tcp::acceptor{*this->ioc, tcp::endpoint(tcp::v4(), port)};
-        this->soc =new tcp::socket{*ioc};
+        this->soc = new tcp::socket{*ioc};
         spdlog::info("server at {}:{}", host, port);
         try {
             while (true) {
@@ -78,15 +88,15 @@ private:
 
     server() = default;
 
-    net::io_context* ioc = nullptr;
-    tcp::socket* soc = nullptr;
+    net::io_context *ioc = nullptr;
+    tcp::socket *soc = nullptr;
     const char *host = nullptr;
     uint16_t port = 0;
     // 回调函数哈希表
     std::unordered_map<const char *, std::function<http::response<http::string_body>(
             http::request<http::string_body> &)>> router_map;
     std::stack<int> middleware;
-    tcp::acceptor* ac = nullptr;
+    tcp::acceptor *ac = nullptr;
 };
 
 #endif //EXAMPLE_SERVER_HPP
