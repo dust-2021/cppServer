@@ -1,0 +1,8 @@
+.idea
+.venv
+venv
+cmake-build-debug
+*.exe
+main
+extern
+locals
