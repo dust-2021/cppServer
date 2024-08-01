@@ -1,7 +1,7 @@
 set(http_dir
         web/init.hpp
-        web/server.hpp
         web/routers.hpp
+        web/server.hpp
 )
 add_library(resource INTERFACE ${http_dir} )
 

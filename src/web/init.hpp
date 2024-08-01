@@ -1,4 +1,5 @@
-#pragma  once
+#ifndef  EXAMPLE_INIT_HPP
+#define  EXAMPLE_INIT_HPP
 
 #include "boost/beast.hpp"
 #include "boost/beast/ssl.hpp"
@@ -23,4 +24,7 @@ public:
         return std::logic_error::what();
     }
 };
+
+
+#endif // EXAMPLE_INIT_HPP
 
