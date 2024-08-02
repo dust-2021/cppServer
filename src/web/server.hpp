@@ -65,13 +65,12 @@ public:
         }
     }
 
-    void run(const char *host_, uint16_t port_ = 8000, uint8_t concurrency = 1) {
-        this->host = host_;
+    void run( uint16_t port_ = 8000, uint8_t concurrency = 1) {
         this->port = port_;
         this->ioc = new net::io_context{concurrency};
         this->ac = new tcp::acceptor{*this->ioc, tcp::endpoint(tcp::v4(), port)};
         this->soc = new tcp::socket{*ioc};
-        spdlog::info("server at {}:{}", host, port);
+        spdlog::info("server at :{}", port);
         try {
             while (true) {
                 (*ac).accept(*soc);
@@ -90,12 +89,10 @@ private:
 
     net::io_context *ioc = nullptr;
     tcp::socket *soc = nullptr;
-    const char *host = nullptr;
     uint16_t port = 0;
     // 回调函数哈希表
     std::unordered_map<const char *, std::function<http::response<http::string_body>(
             http::request<http::string_body> &)>> router_map;
-    std::stack<int> middleware;
     tcp::acceptor *ac = nullptr;
 };
 
