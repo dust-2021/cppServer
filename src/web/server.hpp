@@ -4,8 +4,10 @@
 #include <utility>
 
 #include "init.hpp"
+#include "middleware.hpp"
 #include "spdlog/spdlog.h"
 #include "stack"
+#include "vector"
 
 class server {
 public:
@@ -23,7 +25,6 @@ public:
     void router(const char *route,
                 http::response<http::string_body>
                 (*pFunction)(const server *const, http::request<http::string_body>)) {
-
         router_map[route] = [this, pFunction](http::request<http::string_body> &req) {
             return pFunction(this, req);
         };
@@ -36,6 +37,7 @@ public:
         http::read(_soc, buffer, req);
         auto target = req.target().data();
         spdlog::info("receive from '{}', '{}'", _soc.remote_endpoint().address().to_string(), target);
+
         try {
             auto it = router_map.find(target);
             http::response<http::string_body> res;
@@ -65,21 +67,25 @@ public:
         }
     }
 
-    void run( uint16_t port_ = 8000, uint8_t concurrency = 1) {
+    void run(uint16_t port_ = 8000, uint8_t concurrency = 1) {
         this->port = port_;
         this->ioc = new net::io_context{concurrency};
         this->ac = new tcp::acceptor{*this->ioc, tcp::endpoint(tcp::v4(), port)};
         this->soc = new tcp::socket{*ioc};
         spdlog::info("server at :{}", port);
-        try {
-            while (true) {
-                (*ac).accept(*soc);
-                handler(*soc);
-            }
-        }
-        catch (const std::exception &exception) {
-            spdlog::error("server start failed: {}", exception.what());
 
+        int i = 0;
+        while (i < 5) {
+            try {
+                while (true) {
+                    (*ac).accept(*soc);
+                    handler(*soc);
+                }
+            }
+            catch (const std::exception &exception) {
+                spdlog::error("server start failed: {}", exception.what());
+                i++;
+            }
         }
     };
 

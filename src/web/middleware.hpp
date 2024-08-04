@@ -7,7 +7,8 @@
 
 class middleware {
 public:
-    middleware() = delete;
+
+    // 子类必须重载仿函数
     virtual http::request<http::string_body> operator()(http::request<http::string_body> &req) = 0;
 };
 
