@@ -20,6 +20,11 @@ public:
 
     }
 
+    explicit webException(std::string &msg) :
+            std::logic_error(msg) {
+
+    }
+
     const char *what() {
         return std::logic_error::what();
     }

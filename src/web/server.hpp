@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "init.hpp"
+#include "routers.hpp"
 #include "middleware.hpp"
 #include "spdlog/spdlog.h"
 #include "stack"
@@ -34,18 +35,18 @@ public:
         beast::flat_buffer buffer;
         http::request<http::string_body> req;
 
+        // 读取请求
         http::read(_soc, buffer, req);
-        auto target = req.target().data();
-        spdlog::info("receive from '{}', '{}'", _soc.remote_endpoint().address().to_string(), target);
+        auto r_ctx = r_context(req);
+        spdlog::info("receive from '{}', '{}'", _soc.remote_endpoint().address().to_string(), r_ctx.route);
 
         try {
-            auto it = router_map.find(target);
+            auto it = router_map.find(r_ctx.route);
             http::response<http::string_body> res;
             if (it == router_map.end()) {
                 res = http::response<http::string_body>{http::status::not_found, req.version()};
 
-                res.set(http::field::server, "Beast");
-                res.set(http::field::content_type, "text/plain");
+
                 res.keep_alive(req.keep_alive());
                 res.body() = "Not Found";
 
@@ -75,7 +76,11 @@ public:
         spdlog::info("server at :{}", port);
 
         int i = 0;
-        while (i < 5) {
+        while (true) {
+            if (i >= 5){
+                spdlog::error("server start finally failed.");
+                return;
+            }
             try {
                 while (true) {
                     (*ac).accept(*soc);
@@ -83,7 +88,7 @@ public:
                 }
             }
             catch (const std::exception &exception) {
-                spdlog::error("server start failed: {}", exception.what());
+                spdlog::warn("server start failed: {}", exception.what());
                 i++;
             }
         }
@@ -97,9 +102,10 @@ private:
     tcp::socket *soc = nullptr;
     uint16_t port = 0;
     // 回调函数哈希表
-    std::unordered_map<const char *, std::function<http::response<http::string_body>(
+    std::unordered_map<std::string, std::function<http::response<http::string_body>(
             http::request<http::string_body> &)>> router_map;
     tcp::acceptor *ac = nullptr;
+
 };
 
 #endif //EXAMPLE_SERVER_HPP
