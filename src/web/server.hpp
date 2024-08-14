@@ -4,8 +4,8 @@
 #include <utility>
 
 #include "init.hpp"
-#include "routers.hpp"
 #include "middleware.hpp"
+#include "routers.hpp"
 #include "spdlog/spdlog.h"
 #include "stack"
 #include "vector"
@@ -23,13 +23,10 @@ public:
 
 
     // 注册路由回调函数
-    void router(const char *route,
-                http::response<http::string_body>
-                (*pFunction)(const server *const, http::request<http::string_body>)) {
-        router_map[route] = [this, pFunction](http::request<http::string_body> &req) {
-            return pFunction(this, req);
-        };
+    void router(const char *url, base_route *r) {
+        router_map[std::string(url)] = r;
     };
+
 
     void handler(tcp::socket &_soc) {
         beast::flat_buffer buffer;
@@ -43,22 +40,25 @@ public:
         try {
             auto it = router_map.find(r_ctx.route);
             http::response<http::string_body> res;
+
+            // 404 not found
             if (it == router_map.end()) {
                 res = http::response<http::string_body>{http::status::not_found, req.version()};
-
-
                 res.keep_alive(req.keep_alive());
                 res.body() = "Not Found";
 
+                res.prepare_payload();
+
+                http::write(_soc, res);
+
             } else {
-                auto func = it->second;
-                res = func(req);
+                auto r = it->second;
+                // 调用对象仿函数
+                (*r)(r_ctx);
+
+                r_ctx.res.prepare_payload();
+                http::write(_soc, r_ctx.res);
             }
-
-            res.prepare_payload();
-
-            http::write(_soc, res);
-
             _soc.shutdown(tcp::socket::shutdown_send);
             _soc.close();
             return;
@@ -68,6 +68,7 @@ public:
         }
     }
 
+    // 执行监听
     void run(uint16_t port_ = 8000, uint8_t concurrency = 1) {
         this->port = port_;
         this->ioc = new net::io_context{concurrency};
@@ -77,7 +78,7 @@ public:
 
         int i = 0;
         while (true) {
-            if (i >= 5){
+            if (i >= 5) {
                 spdlog::error("server start finally failed.");
                 return;
             }
@@ -94,6 +95,19 @@ public:
         }
     };
 
+    ~server(){
+        soc->close();
+        ac->close();
+        ioc->stop();
+        delete soc;
+        delete ac;
+        delete ioc;
+        for (const auto& item: router_map) {
+            delete item.second;
+        }
+        router_map.clear();
+    }
+
 private:
 
     server() = default;
@@ -102,8 +116,7 @@ private:
     tcp::socket *soc = nullptr;
     uint16_t port = 0;
     // 回调函数哈希表
-    std::unordered_map<std::string, std::function<http::response<http::string_body>(
-            http::request<http::string_body> &)>> router_map;
+    std::unordered_map<std::string, base_route*> router_map;
     tcp::acceptor *ac = nullptr;
 
 };

@@ -3,6 +3,7 @@ set(http_dir
         web/routers.hpp
         web/server.hpp
         web/middleware.hpp
+        controller/base.hpp
 )
 add_library(resource INTERFACE ${http_dir} )
 
