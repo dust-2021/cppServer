@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 project(backend CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 # 检测boost版本
 find_package(Boost REQUIRED)
 set(least_boost_version "1.66")

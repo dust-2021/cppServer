@@ -1,5 +1,5 @@
-#ifndef EXAMPLE_SERVER_HPP
-#define EXAMPLE_SERVER_HPP
+#ifndef BACKEND_WEB_SERVER_HPP
+#define BACKEND_WEB_SERVER_HPP
 
 #include <utility>
 
@@ -7,11 +7,11 @@
 #include "middleware.hpp"
 #include "routers.hpp"
 #include "spdlog/spdlog.h"
-#include "stack"
 #include "vector"
 
 class server {
 public:
+    // 获取单例引用
     static server &instance() {
         static server ser;
         return ser;
@@ -27,7 +27,7 @@ public:
         router_map[std::string(url)] = r;
     };
 
-
+    //
     void handler(tcp::socket &_soc) {
         beast::flat_buffer buffer;
         http::request<http::string_body> req;
@@ -35,30 +35,29 @@ public:
         // 读取请求
         http::read(_soc, buffer, req);
         auto r_ctx = r_context(req);
-        spdlog::info("receive from '{}', '{}'", _soc.remote_endpoint().address().to_string(), r_ctx.route);
+
 
         try {
+            // 执行基础中间件
+            for (const auto& item: base_middleware) {
+                (*item)(r_ctx);
+            }
+
+            spdlog::info("receive '{}' from '{}', '{}'",r_ctx.method.to_string(),
+                         _soc.remote_endpoint().address().to_string(), r_ctx.route);
             auto it = router_map.find(r_ctx.route);
             http::response<http::string_body> res;
 
             // 404 not found
             if (it == router_map.end()) {
-                res = http::response<http::string_body>{http::status::not_found, req.version()};
-                res.keep_alive(req.keep_alive());
-                res.body() = "Not Found";
-
-                res.prepare_payload();
-
-                http::write(_soc, res);
-
+                r_ctx.res.body() = "Not Found";
             } else {
-                auto r = it->second;
-                // 调用对象仿函数
-                (*r)(r_ctx);
-
-                r_ctx.res.prepare_payload();
-                http::write(_soc, r_ctx.res);
+                // 调用路由对象仿函数
+                (*(it->second))(r_ctx);
             }
+
+            r_ctx.res.prepare_payload();
+            http::write(_soc, r_ctx.res);
             _soc.shutdown(tcp::socket::shutdown_send);
             _soc.close();
             return;
@@ -110,7 +109,12 @@ public:
 
 private:
 
-    server() = default;
+    server() {
+        // 添加基本中间件
+        auto temp = new base_parser;
+        base_middleware.push_back(temp);
+
+    };
 
     net::io_context *ioc = nullptr;
     tcp::socket *soc = nullptr;
@@ -118,7 +122,8 @@ private:
     // 回调函数哈希表
     std::unordered_map<std::string, base_route*> router_map;
     tcp::acceptor *ac = nullptr;
+    std::vector<middleware*> base_middleware;
 
 };
 
-#endif //EXAMPLE_SERVER_HPP
+#endif //BACKEND_WEB_SERVER_HPP

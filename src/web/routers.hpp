@@ -1,5 +1,5 @@
-#ifndef  EXAMPLE_ROUTERS_HPP
-#define  EXAMPLE_ROUTERS_HPP
+#ifndef  BACKEND_WEB_ROUTERS_HPP
+#define  BACKEND_WEB_ROUTERS_HPP
 
 #include "init.hpp"
 #include "middleware.hpp"
@@ -11,18 +11,18 @@ public:
     explicit base_route(const char *r) : r(r) {
     };
 
-    virtual void get_method(r_context &ctx) {
+    virtual void get_method(r_context &ctx) const {
         throw webException("valid method 'GET'");
     };
 
-    virtual void post_method(r_context & ctx) {
+    virtual void post_method(r_context & ctx) const {
         throw webException("valid method 'POST'");
     };
 
     virtual void operator()(r_context &ctx) final {
         for (auto &item: f_middle) {
-
             item(ctx);
+            if (ctx.exited){ return;};
         }
 
         if (ctx.method.empty() | ctx.method == "get"){
@@ -33,6 +33,7 @@ public:
 
         for (auto &item: b_middle) {
             item(ctx);
+            if (ctx.exited){ return;};
         }
     };
 
@@ -43,5 +44,16 @@ public:
     std::vector<middleware> b_middle;
 };
 
+/* 路由组类
+ * */
+class group {
+public:
+    group(const char* r){
 
-#endif // EXAMPLE_ROUTERS_HPP
+    }
+    std::vector<base_route> routers;
+    std::vector<group> groups;
+};
+
+
+#endif // BACKEND_WEB_ROUTERS_HPP

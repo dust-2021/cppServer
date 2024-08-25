@@ -1,5 +1,5 @@
-#ifndef  EXAMPLE_INIT_HPP
-#define  EXAMPLE_INIT_HPP
+#ifndef  BACKEND_WEB_INIT_HPP
+#define  BACKEND_WEB_INIT_HPP
 
 #include "boost/beast.hpp"
 #include "boost/beast/ssl.hpp"
@@ -31,5 +31,5 @@ public:
 };
 
 
-#endif // EXAMPLE_INIT_HPP
+#endif // BACKEND_WEB_INIT_HPP
 
