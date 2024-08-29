@@ -5,125 +5,80 @@
 
 #include "init.hpp"
 #include "middleware.hpp"
-#include "routers.hpp"
+#include "router.hpp"
 #include "spdlog/spdlog.h"
 #include "vector"
+#include "session.hpp"
+#include "../config.hpp"
 
-class server {
+class server : public std::enable_shared_from_this<server> {
 public:
-    // 获取单例引用
-    static server &instance() {
-        static server ser;
-        return ser;
+    // 获取单例
+    static std::shared_ptr<server> instance() {
+        std::call_once(_flag, []() {
+            _instance.reset(new server);
+        });
+        return _instance->shared_from_this();
     }
 
     server(const server &other) = delete;
 
-    server(server &&other) = delete;
-
-
-    // 注册路由回调函数
-    void router(const char *url, base_route *r) {
-        router_map[std::string(url)] = r;
-    };
-
-    //
-    void handler(tcp::socket &_soc) {
-        beast::flat_buffer buffer;
-        http::request<http::string_body> req;
-
-        // 读取请求
-        http::read(_soc, buffer, req);
-        auto r_ctx = r_context(req);
-
-
-        try {
-            // 执行基础中间件
-            for (const auto& item: base_middleware) {
-                (*item)(r_ctx);
-            }
-
-            spdlog::info("receive '{}' from '{}', '{}'",r_ctx.method.to_string(),
-                         _soc.remote_endpoint().address().to_string(), r_ctx.route);
-            auto it = router_map.find(r_ctx.route);
-            http::response<http::string_body> res;
-
-            // 404 not found
-            if (it == router_map.end()) {
-                r_ctx.res.body() = "Not Found";
-            } else {
-                // 调用路由对象仿函数
-                (*(it->second))(r_ctx);
-            }
-
-            r_ctx.res.prepare_payload();
-            http::write(_soc, r_ctx.res);
-            _soc.shutdown(tcp::socket::shutdown_send);
-            _soc.close();
-            return;
-        } catch (const std::exception &exception) {
-            spdlog::error("request failed: {}", exception.what());
-            _soc.close();
-        }
-    }
+    server &operator=(const server &) = delete;
 
     // 执行监听
-    void run(uint16_t port_ = 8000, uint8_t concurrency = 1) {
-        this->port = port_;
-        this->ioc = new net::io_context{concurrency};
+    void run() {
+        this->port = svrConf::instance()->port;
+        const size_t t_num = svrConf::instance()->concurrency == 0 ? std::thread::hardware_concurrency()
+                                                                   : svrConf::instance()->concurrency;
+        this->ioc = new net::io_context{static_cast<int>(t_num)};
         this->ac = new tcp::acceptor{*this->ioc, tcp::endpoint(tcp::v4(), port)};
-        this->soc = new tcp::socket{*ioc};
-        spdlog::info("server at :{}", port);
+        spdlog::info("server at :{}, thread: {}", port, t_num);
 
-        int i = 0;
-        while (true) {
-            if (i >= 5) {
-                spdlog::error("server start finally failed.");
-                return;
-            }
-            try {
-                while (true) {
-                    (*ac).accept(*soc);
-                    handler(*soc);
-                }
-            }
-            catch (const std::exception &exception) {
-                spdlog::warn("server start failed: {}", exception.what());
-                i++;
-            }
+        do_accept();
+
+        // 多线程监听
+        std::vector<std::thread> threads;
+        for (std::size_t i = 0; i < t_num; ++i) {
+            threads.emplace_back([this]() { ioc->run(); });
+        }
+        for (auto &thread: threads) {
+            thread.join();
         }
     };
 
-    ~server(){
-        soc->close();
+    ~server() {
         ac->close();
         ioc->stop();
-        delete soc;
+        spdlog::info("server shutdown");
         delete ac;
         delete ioc;
-        for (const auto& item: router_map) {
-            delete item.second;
-        }
-        router_map.clear();
     }
 
 private:
+    void do_accept() {
+        (*ac).async_accept([self = shared_from_this()](beast::error_code ec, tcp::socket _soc) {
+            if (!ec) {
+                auto se = std::make_shared<session>(_soc);
+                se->do_read();
+            };
+            self->do_accept();
+        });
+    }
 
-    server() {
-        // 添加基本中间件
-        auto temp = new base_parser;
-        base_middleware.push_back(temp);
+    server() = default;
 
-    };
+    // 单例指针
+    static std::shared_ptr<server> _instance;
+    // 单例创建flag
+    static std::once_flag _flag;
 
     net::io_context *ioc = nullptr;
-    tcp::socket *soc = nullptr;
     uint16_t port = 0;
-    // 回调函数哈希表
-    std::unordered_map<std::string, base_route*> router_map;
     tcp::acceptor *ac = nullptr;
-    std::vector<middleware*> base_middleware;
 
 };
+
+std::shared_ptr<server> server::_instance;
+std::once_flag server::_flag;
 
 #endif //BACKEND_WEB_SERVER_HPP

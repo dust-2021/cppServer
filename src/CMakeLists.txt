@@ -1,9 +1,15 @@
 set(http_dir
         web/init.hpp
-        web/routers.hpp
         web/server.hpp
         web/middleware.hpp
-        controller/base.hpp
+        web/session.hpp
+
+        controller/index.hpp
+        config.hpp
+        web/router.hpp
+        web/middlewares/url_parser.hpp
+        controller/init_router.hpp
+        web/middlewares/token.hpp
 )
 add_library(resource INTERFACE ${http_dir} )
 

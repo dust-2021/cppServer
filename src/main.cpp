@@ -1,8 +1,8 @@
 #include "web/server.hpp"
-#include "controller/base.hpp"
+#include "controller/init_router.hpp"
 
 int main() {
-    server& ser = server::instance();
-    ser.router("/", new api::index());
-    ser.run();
+    auto svr = server::instance();
+    api::init();
+    svr->run();
 };
