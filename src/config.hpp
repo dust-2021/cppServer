@@ -4,7 +4,6 @@
 #include "spdlog/spdlog.h"
 #include <mutex>
 #include "memory"
-#include "cstdlib"
 #include "yaml-cpp/yaml.h"
 
 class svrConf : public std::enable_shared_from_this<svrConf> {
@@ -17,6 +16,7 @@ public:
                 _instance->secret = conf["server"]["secret"].as<std::string>();
                 _instance->port = conf["server"]["port"].as<int16_t>();
                 _instance->concurrency = conf["server"]["concurrency"].as<uint8_t>();
+                _instance->debug = conf["server"]["debug"].as<bool>();
 
             } catch (std::exception &e) {
                 spdlog::error("load config failed: {}", e.what());
@@ -34,6 +34,7 @@ public:
 
     uint16_t port = 8000;
     uint8_t concurrency = 0;
+    bool debug = false;
 
 private:
     svrConf() = default;

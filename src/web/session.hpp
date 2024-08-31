@@ -5,6 +5,7 @@
 #include "middlewares/url_parser.hpp"
 #include "middleware.hpp"
 #include "router.hpp"
+#include "config.hpp"
 
 class session : public std::enable_shared_from_this<session> {
 public:
@@ -36,7 +37,18 @@ public:
                                  self->ctx->exited = true;
                              } else {
                                  // 执行处理逻辑
-                                 (*r)(*(self->ctx));
+                                 try {
+                                     (*r)(*(self->ctx));
+                                 } catch (std::exception e) {
+                                      self->ctx->exited = true;
+                                      auto conf = svrConf::instance();
+                                      self->ctx->res.result(http::status::bad_gateway);
+                                     if (conf->debug){
+                                         // debug时返回错误信息
+                                         self->ctx->res.body() = e.what();
+                                     }
+                                     spdlog::error("controller failed: {}", e.what());
+                                 }
                              }
 
                              self->do_write();

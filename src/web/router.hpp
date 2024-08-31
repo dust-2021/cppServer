@@ -76,30 +76,49 @@ public:
 
 // 路由组类
 class group : public std::enable_shared_from_this<group> {
+    friend class handler;
+
 public:
     group() = delete;
 
     template<class... Args>
-    explicit group(const char *r, const Args &...args):r(r) {
-        routers(args...);
+    explicit group(const char *r, Args...args):r(r) {
+        (enroll(args), ...);
     }
 
-    template<class T>
-    void route(std::shared_ptr<T> item) {
-        if (std::is_base_of<base_route, T>::value) {
-            routers.push_back(item);
-            return;
-        }
-        throw webException("valid type of route register");
+    template<class ...Args>
+    void routes(Args...args) {
+        (enroll(args), ...);
     }
-
-    std::vector<std::shared_ptr<base_route>> routers;
 
     // 后置逻辑中间件
     std::vector<std::shared_ptr<middleware>> f_middle;
     // 前置逻辑中间件
     std::vector<std::shared_ptr<middleware>> b_middle;
     std::string r;
+
+private:
+    template<class T>
+    void enroll(const std::shared_ptr<T> &item) {
+        if constexpr (std::is_base_of<base_route, T>::value) {
+            item->f_middle.insert(item->f_middle.begin(), f_middle.begin(), f_middle.end());
+            item->b_middle.insert(item->b_middle.end(), b_middle.begin(), b_middle.end());
+            item->r = r + item->r;
+            _routes.push_back(item);
+            return;
+        } else if constexpr (std::is_same<group, T>::value) {
+            for (const std::shared_ptr<base_route> &p: item->_routes) {
+                p->f_middle.insert(p->f_middle.begin(), f_middle.begin(), f_middle.end());
+                p->b_middle.insert(p->b_middle.end(), b_middle.begin(), b_middle.end());
+                p->r = r + p->r;
+                _routes.push_back(p);
+            }
+        }
+        throw webException("valid type of enroll register");
+    }
+
+    std::vector<std::shared_ptr<base_route>> _routes;
+
 };
 
 
@@ -120,7 +139,7 @@ public:
 
     template<class ...Args>
     void routes(Args ...args) {
-        route(args...);
+        (enroll(args), ...);
     }
 
     // 未找到则返回空指针
@@ -138,16 +157,18 @@ private:
 
     // 注册路由函数
     template<class T>
-    void route(const std::shared_ptr<T> &item) {
-        if (std::is_base_of<base_route, T>::value) {
+    void enroll(const std::shared_ptr<T> &item) {
+        if constexpr (std::is_base_of<base_route, T>::value) {
             _routes[item->r] = item;
             return;
+        } else if constexpr (std::is_same<T, group>::value) {
+            // 注册组内所有路由类
+            for (const std::shared_ptr<base_route> &p: item->_routes) {
+                _routes[p->r] = p;
+            }
+            return;
         }
-        throw webException("valid type of route register");
-    }
-
-    void group(const std::shared_ptr<group> &p) {
-
+        throw webException("valid type of enroll register");
     }
 
     std::unordered_map<std::string, std::shared_ptr<base_route>> _routes;
