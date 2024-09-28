@@ -10,6 +10,7 @@
 #include "vector"
 #include "session.hpp"
 #include "../config.hpp"
+#include "../controller/init_router.hpp"
 
 class server : public std::enable_shared_from_this<server> {
 public:
@@ -34,6 +35,8 @@ public:
         this->ac = new tcp::acceptor{*this->ioc, tcp::endpoint(tcp::v4(), port)};
         spdlog::info("server at :{}, thread: {}", port, t_num);
 
+        // 加载路由处理器
+        api::init();
         do_accept();
 
         // 多线程监听

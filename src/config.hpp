@@ -5,6 +5,8 @@
 #include <mutex>
 #include "memory"
 #include "yaml-cpp/yaml.h"
+#include "openssl/rsa.h"
+#include "iostream"
 
 class svrConf : public std::enable_shared_from_this<svrConf> {
 public:
@@ -19,7 +21,7 @@ public:
                 _instance->debug = conf["server"]["debug"].as<bool>();
 
             } catch (std::exception &e) {
-                spdlog::error("load config failed: {}", e.what());
+                spdlog::critical("load config failed: {}", e.what());
                 std::exit(1);
             }
         });
@@ -33,11 +35,15 @@ public:
     std::string secret;
 
     uint16_t port = 8000;
+
     uint8_t concurrency = 0;
+
     bool debug = false;
 
 private:
     svrConf() = default;
+    // yaml 配置
+    YAML::Node _conf;
 
     static std::shared_ptr<svrConf> _instance;
     static std::once_flag _flag;
@@ -45,4 +51,5 @@ private:
 
 std::shared_ptr<svrConf> svrConf::_instance;
 std::once_flag svrConf::_flag;
+
 #endif //BACKEND_CONFIG_HPP

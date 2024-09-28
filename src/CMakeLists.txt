@@ -7,7 +7,8 @@ set(http_dir
         config.hpp
         web/router.hpp
         web/middlewares/url_parser.hpp
-        web/middlewares/token.hpp
+        web/middlewares/authentication.hpp
+        utils/token.hpp
 )
 add_subdirectory(controller)
 
